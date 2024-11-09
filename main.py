@@ -6,6 +6,10 @@ import glob
 import os
 from tkinter import Frame
 
+# 假设棋盘格每个格子的实际大小是 25 毫米
+square_size = 25
+# 棋盘格的尺寸
+chessboard_size = (7, 7)  # (内角点数-1) x (内角点数-1)
 # 初始化全局变量
 photo_image = None
 file_index = 1  # 初始化文件索引
@@ -44,11 +48,9 @@ scrollbar.pack(side='right', fill='y', padx=10)
 # 配置 Text 控件使用滚动条
 text.config(yscrollcommand=scrollbar.set)
 
-# 棋盘格的尺寸
-chessboard_size = (6, 6)  # (内角点数-1) x (内角点数-1)
 # 创建棋盘格的世界坐标系点，棋盘格的每个格点
 objp = np.zeros((chessboard_size[0] * chessboard_size[1], 3), np.float32)
-objp[:, :2] = np.mgrid[0:chessboard_size[0], 0:chessboard_size[1]].T.reshape(-1, 2)
+objp[:, :2] = np.mgrid[0:chessboard_size[0], 0:chessboard_size[1]].T.reshape(-1, 2) * square_size
 
 # 标准差用于亚像素角点检测
 criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
@@ -93,15 +95,15 @@ def take_photo():
 # 相机标定函数
 def calibration_cam():
     # 存储所有图片的角点位置
-    objpoints = []  # 3d point in real world space
-    imgpoints = []  # 2d points in image plane.
+    object_points = []  # 3d point in real world space
+    image_points = []  # 2d points in image plane.
 
     # 准备读取图片
     images = glob.glob('image/*.jpg')  # 读取棋盘格图片
 
     # 遍历棋盘格图片
-    for fname in images:
-        img = cv2.imread(fname)
+    for file_name in images:
+        img = cv2.imread(file_name)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         # 寻找棋盘格角点
@@ -109,23 +111,24 @@ def calibration_cam():
 
         # 如果找到了角点，添加到列表中
         if ret:
-            objpoints.append(objp)
+            object_points.append(objp)
 
             # 优化角点位置
             cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
-            imgpoints.append(corners)
+            image_points.append(corners)
         else:
-            print(f"在图片 {fname} 中未检测到棋盘格角点")
+            print(f"在图片 {file_name} 中未检测到棋盘格角点")
 
     # 检查有效图像数量
-    if len(objpoints) == 0 or len(imgpoints) == 0:
+    if len(object_points) == 0 or len(image_points) == 0:
         messagebox.showerror("错误", "没有检测到足够的棋盘格角点，无法进行相机标定。")
     else:
         # 相机标定
-        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
+        ret, mtx, dist, rotate_vecs, translate_vecs = cv2.calibrateCamera(object_points, image_points, gray.shape[::-1],
+                                                                          None, None)
 
         # 打印结果到 Text 控件
-        result_text = f"相机矩阵：\n{mtx}\n畸变系数：\n{dist}\n旋转向量：\n{rvecs}\n平移向量：\n{tvecs}"
+        result_text = f"相机矩阵：\n{mtx}\n畸变系数：\n{dist}\n旋转向量：\n{rotate_vecs}\n平移向量：\n{translate_vecs}"
         text.delete('1.0', END)  # 清空 Text 控件
         text.insert('1.0', result_text)  # 插入标定结果
 
